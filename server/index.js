@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const fileReader = require("fs/promises")
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -69,6 +70,69 @@ app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
 
+app.get("/videos", async (req, res) => {
+    try {
+        const uploadDir = path.join(__dirname, "uploads")
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const files =  await fileReader.readdir(uploadDir);
+
+        const videos = files.map(file => {
+            const stats = fs.statSync(path.join(uploadDir,file))
+            return {
+                fileName: file,
+                size: stats.size,
+                url: `/uploads/${file}`
+            }
+        })
+        const data = {
+            total: videos.length,
+            videos: videos
+        }
+        res.send(data)
+    } catch(err) {
+        console.log(err)
+        res.send("Somthing went wrong pls try again")
+    }
+})
+
+app.get("/videos/:fileName", (req,res) => {
+    const fileName = req.params.fileName;
+    const videoPath = path.join(__dirname, 'uploads', fileName);
+    if (!fs.existsSync(videoPath)) {
+        return res.status(404).send('Video not found');
+    }
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    if(range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[0], 10) : fileSize - 1;
+        const chunkSize = (end - start) + 1;
+        const file = fs.createReadStream(videoPath, {start, end});
+
+        const head = {
+            'Content-Length': chunkSize,
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': "bytes",
+            'Content-Type': 'video/mp4',
+        }
+        res.writeHead(206, head);
+        file.pipe(res);
+    } else {
+        const head = {
+            'Content-Length': fileSize,
+            'Content-Type': 'video/mp4',
+        };
+        res.writeHead(200, head)
+        fs.createReadStream(videoPath).pipe(res)
+    }
+
+})
+
 // Another route example
 app.post('/upload', validateContentType, (req, res) => {
     req.setTimeout(3600000); 
@@ -95,19 +159,17 @@ app.post('/upload', validateContentType, (req, res) => {
             }
         } else if (err) {
             // Other errors (including your custom fileFilter errors)
-            console.log(err, "=================")
             return res.status(400).json({
                 error: err.message
             });
         }
-
+        console.log(req.baseUrl)
         // If no file was provided
         if (!req.file) {
             return res.status(400).json({
                 error: 'Please provide a file'
             });
         }
-        console.log("==============file   =========>", req.file)
         // Success case
         res.status(200).json({
             message: 'File uploaded successfully',

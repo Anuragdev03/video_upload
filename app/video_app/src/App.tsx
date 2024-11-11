@@ -1,11 +1,13 @@
 import { useState } from 'react'
 
 import './App.css'
+import VideoList from './VideoList';
 
 function App() {
   const [uploadVideos, setUploadVideos] = useState(false);
   const [seeVideos, setSeeVideos] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState("")
 
   function handleUploadVideos() {
     setUploadVideos(true)
@@ -30,12 +32,14 @@ function App() {
         <input type='file' onChange={handleChange} />
         <p className='file_name'>{file?.name}</p>
         <button className='upload_btn' onClick={handleUpload}>Upload</button>
+        {uploadStatus}
       </div>
     )
   }
 
   async function handleUpload() {
     if (!file) return
+    setUploadStatus("Uploading...")
     const formData = new FormData();
     formData.append('video', file);
 
@@ -45,7 +49,9 @@ function App() {
         body: formData,
       });
       const result = await response.json();
+
       console.log(result);
+      setUploadStatus("Upload Successful")
     } catch (error) {
       console.error('Error uploading video:', error);
     }
@@ -59,6 +65,7 @@ function App() {
         <button onClick={handleUploadVideos}>Upload Videos</button>
       </div>
       {uploadVideos ? <UploadVideos /> : null}
+      {seeVideos ? <VideoList /> : null}
     </>
   )
 }
